@@ -1,58 +1,76 @@
-
+```bash
 #!/usr/bin/env bash
 
-echo "===== System Health Check ====="
+show_all=true
+show_cpu=false
+show_memory=false
 
-# CPU
-echo
-echo "[CPU]"
-uptime
+# Handle long options
+for arg in "$@"; do
+    if [[ "$arg" == "--help" ]]; then
+        echo "Usage: sysinfo [-c] [-m] [--help]"
+        echo
+        echo "Options:"
+        echo "  -c       Show CPU information"
+        echo "  -m       Show memory information"
+        echo "  --help   Show this help message"
+        exit 0
+    fi
+done
 
-# RAM
-echo
-echo "[RAM]"
-free -h
+# Handle short options
+while getopts "cm" opt; do
+    case "$opt" in
+        c)
+            show_all=false
+            show_cpu=true
+            ;;
+        m)
+            show_all=false
+            show_memory=true
+            ;;
+        \?)
+            echo "Invalid option. Use --help for help."
+            exit 1
+            ;;
+    esac
+done
 
-# Disk
-echo
-echo "[DISK]"
-df -h /
+show_system() {
+    echo "===== System Information ====="
+    echo "Hostname:     $(hostname)"
+    echo "Distribution: $(. /etc/os-release && echo "$PRETTY_NAME")"
+    echo "Kernel:       $(uname -r)"
+    echo "Architecture: $(uname -m)"
+    echo "Uptime:       $(uptime -p)"
+}
 
-# GPU
-echo
-echo "[GPU]"
+show_cpu_info() {
+    echo "===== CPU Information ====="
+    awk -F ': ' '/model name/ {print "CPU:          " $2; exit}' /proc/cpuinfo
+    echo "Logical CPUs: $(nproc)"
+}
 
-if command -v nvidia-smi >/dev/null 2>&1; then
-    nvidia-smi \
-        --query-gpu=name,driver_version,temperature.gpu,utilization.gpu,memory.used,memory.total \
-        --format=csv
+show_memory_info() {
+    echo "===== Memory Information ====="
+    free -h | awk 'NR == 1 || NR == 2'
+}
+
+if [[ "$show_all" == true ]]; then
+    show_system
+    echo
+    show_cpu_info
+    echo
+    show_memory_info
 else
-    echo "[!] NVIDIA GPU utility (nvidia-smi) is unavailable."
-    echo "    NVIDIA GPU information cannot be retrieved through this tool."
+    if [[ "$show_cpu" == true ]]; then
+        show_cpu_info
+        echo
+    fi
+
+    if [[ "$show_memory" == true ]]; then
+        show_memory_info
+        echo
+    fi
 fi
-
-
-# Network
-echo
-echo "[NETWORK]"
-
-# Local IP addresses
-echo "IP address(es):"
-ip -brief address show | awk '$1 != "lo" {print $1, $3}'
-
-# Default gateway
-echo
-echo "Default gateway:"
-ip route show default | awk '{print $3, "(" $5 ")" }'
-
-# Internet connectivity
-echo
-if ping -c 1 -W 2 1.1.1.1 >/dev/null 2>&1; then
-    echo "[✓] Internet connection is available."
-else
-    echo "[✗] No response from internet connectivity test."
-fi
-
-
-echo
-echo "===== Health Check Complete ====="
+```
